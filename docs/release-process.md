@@ -30,6 +30,18 @@ Do not claim an image digest or restore the retired pipeline as part of routine
 versioning. A future binary or container distribution needs its own reviewed
 packaging and installation workflow.
 
+## Accepted installation cohort
+
+Console 1.2.0 is validated with Lenso Agent 0.1.3, including its separate App Web
+and Console Web binaries. Install the matching Agent release before running
+`pnpm agent:web`. Portable Plugin packaging and lifecycle management use Cargo
+`lenso-cli 0.5.2` or npm `@lenso/cli 0.16.2`.
+
+Earlier Agent binaries may start but do not contain the managed-Home guards,
+authority-aware Profile capability or approval queuing from this acceptance.
+The supported coding setup still requires a fresh local-authority Home;
+SQLite-managed Profile hot import is not available.
+
 ## Local checks
 
 ```sh

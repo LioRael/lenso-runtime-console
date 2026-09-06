@@ -17,7 +17,7 @@ pnpm install
 pnpm agent:web
 ```
 
-This launcher requires `lenso-agent-web` and `lenso-agent-console-web` v0.1.1
+This launcher requires `lenso-agent-web` and `lenso-agent-console-web` v0.1.3
 or later on `PATH`; set `LENSO_AGENT_WEB_BIN` or
 `LENSO_CONSOLE_AGENT_WEB_BIN` to an absolute binary path for a nonstandard
 install. It starts separate loopback App Agent and Console Agent processes,
