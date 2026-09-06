@@ -1,10 +1,11 @@
 import { Breadcrumb } from "@lenso/ui/breadcrumb";
 import { Button } from "@lenso/ui/button";
 import { PageHeader } from "@lenso/ui/page-header";
+import { Tabs } from "@lenso/ui/tabs";
 import * as stylex from "@stylexjs/stylex";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Boxes } from "lucide-react";
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { lensoUiTokens as tokens } from "../../lenso-ui-token-refs.stylex";
 import { useAgentIdentity } from "../agent/agent-identity-context";
@@ -14,6 +15,13 @@ import {
 } from "../agent/agent-runtime";
 import { usePluginAgentWorkbench } from "./plugin-agent-workbench-context";
 import { applyPluginWorkbenchRequest } from "./plugin-agent-workbench-request";
+import {
+  categoriesForPlugin,
+  matchesPluginFilters,
+  pluginCategories,
+  type PluginCategory,
+  type PluginSelectionFilter,
+} from "./plugin-categories";
 import { PluginDraftNavigationGuard } from "./plugin-draft-navigation-guard";
 import {
   pluginOriginLabel,
@@ -34,8 +42,56 @@ const EMPTY_PLUGIN_ITEMS: readonly PluginWorkbenchItem[] = [];
 const styles = stylex.create({
   breadcrumbParent: {
     display: "inline-flex",
-    "@media (max-width: 420px)": {
-      display: "none",
+    overflow: "hidden",
+    minWidth: 0,
+  },
+  toolbar: {
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    minWidth: 0,
+    width: "100%",
+    flexWrap: "wrap",
+    paddingBlock: 8,
+  },
+  tabs: { minWidth: 0, flex: "1 1 540px", overflowX: "auto", paddingBlock: 2 },
+  tab: {
+    borderRadius: 999,
+    minHeight: 30,
+    paddingInline: 12,
+    flexShrink: 0,
+    backgroundColor: {
+      default: tokens.colorSurfaceCanvas,
+      ":is([data-active])": tokens.colorSurfaceSelected,
+    },
+    borderWidth: 1,
+    borderStyle: "solid",
+    borderColor: tokens.colorBorderTertiary,
+    ":is([data-active])": { borderColor: "transparent" },
+  },
+  count: {
+    color: tokens.colorContentTertiary,
+    fontSize: 11,
+    marginInlineStart: 6,
+    fontVariantNumeric: "tabular-nums",
+  },
+  controls: { display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" },
+  field: {
+    backgroundColor: tokens.colorSurfaceCanvas,
+    borderColor: tokens.colorBorderTertiary,
+    borderStyle: "solid",
+    borderWidth: 1,
+    borderRadius: 999,
+    color: tokens.colorContentSecondary,
+    fontFamily: tokens.fontSans,
+    fontSize: 12,
+    minHeight: 30,
+    paddingInline: 10,
+    minWidth: 0,
+    maxWidth: "100%",
+    outline: {
+      default: "none",
+      ":focus-visible": `2px solid ${tokens.colorFocusRing}`,
     },
   },
   columns: {
@@ -46,13 +102,15 @@ const styles = stylex.create({
     fontWeight: 500,
     gap: tokens.space4,
     gridTemplateColumns: "minmax(180px, 1.4fr) minmax(180px, 1fr) 88px",
-    height: "100%",
+    minHeight: 34,
     paddingInline: 14,
     "@media (max-width: 720px)": {
       gridTemplateColumns: "minmax(0, 1fr) 88px",
     },
   },
   header: {
+    height: "auto",
+    minWidth: 0,
     borderBottomColor: tokens.colorBorderTertiary,
     borderBottomStyle: "solid",
     borderBottomWidth: 1,
@@ -64,7 +122,9 @@ const styles = stylex.create({
     gap: tokens.space3,
   },
   headerSubrow: {
-    paddingInline: 0,
+    height: "auto",
+    minHeight: 46,
+    paddingInline: 12,
   },
   identity: { display: "grid", gap: 2, minWidth: 0 },
   mono: {
@@ -78,7 +138,9 @@ const styles = stylex.create({
   page: {
     boxSizing: "border-box",
     display: "grid",
-    gridTemplateRows: "87.5px minmax(0, 1fr)",
+    gridTemplateRows: "auto minmax(0, 1fr)",
+    gridTemplateColumns: "minmax(0, 1fr)",
+    minWidth: 0,
     height: "100%",
     minHeight: 0,
     width: "100%",
@@ -167,6 +229,7 @@ const styles = stylex.create({
 export function PluginWorkbenchPage() {
   const { agents, selectAgent, selectedAgent } = useAgentIdentity();
   const { request } = usePluginAgentWorkbench();
+  const [category, setCategory] = useState<PluginCategory>("all");
   useEffect(() => {
     if (
       request &&
@@ -180,15 +243,24 @@ export function PluginWorkbenchPage() {
     <AgentPluginWorkbench
       key={selectedAgent.id}
       selectedAgent={selectedAgent}
+      category={category}
+      onCategoryChange={setCategory}
     />
   );
 }
 
 function AgentPluginWorkbench({
+  category,
+  onCategoryChange,
   selectedAgent,
 }: {
   selectedAgent: AgentIdentity;
+  category: PluginCategory;
+  onCategoryChange: (category: PluginCategory) => void;
 }) {
+  const { agents, selectAgent } = useAgentIdentity();
+  const [query, setQuery] = useState("");
+  const [selection, setSelection] = useState<PluginSelectionFilter>("all");
   const configurationAvailable = selectedAgent.capabilities.includes(
     AGENT_PLUGIN_CONFIGURATION_CAPABILITY
   );
@@ -197,6 +269,9 @@ function AgentPluginWorkbench({
     configurationAvailable
   );
   const plugins = workbench.data?.items ?? EMPTY_PLUGIN_ITEMS;
+  const visiblePlugins = plugins.filter((plugin) =>
+    matchesPluginFilters(plugin, category, query, selection)
+  );
   const inventory = workbench.data?.inventory;
   const navigate = useNavigate();
   const { completeRequest, request } = usePluginAgentWorkbench();
@@ -253,11 +328,16 @@ function AgentPluginWorkbench({
   ]);
   const mutation = usePluginMutation(selectedAgent.id, inventory?.streamId);
   return (
-    <div data-page="plugin-workbench" {...stylex.props(styles.page)}>
+    <Tabs.Root
+      value={category}
+      onValueChange={(value) => onCategoryChange(value as PluginCategory)}
+      data-page="plugin-workbench"
+      xstyle={styles.page}
+    >
       <PluginDraftNavigationGuard store={configurationDraftStore} />
       <PageHeader.Root
         aria-label="Plugin navigation"
-        {...stylex.props(styles.header)}
+        xstyle={styles.header}
         variant="team"
       >
         <PageHeader.Row>
@@ -268,7 +348,7 @@ function AgentPluginWorkbench({
                   <Breadcrumb.Icon>
                     <Boxes size={14} strokeWidth={1.75} />
                   </Breadcrumb.Icon>
-                  Lenso
+                  {selectedAgent.label}
                 </Breadcrumb.Link>
               </Breadcrumb.Item>
               <Breadcrumb.Separator xstyle={styles.breadcrumbParent} />
@@ -278,140 +358,216 @@ function AgentPluginWorkbench({
             </Breadcrumb.List>
           </Breadcrumb.Root>
           <PageHeader.Spacer />
-          <PageHeader.Actions>
-            <div {...stylex.props(styles.headerActions)}>
-              <InstallPluginDialog
-                disabled={
-                  !workbench.authoringEnabled ||
-                  selectedAgent.role !== "console"
-                }
-                error={
-                  mutation.variables?.type === "install" &&
-                  mutation.error instanceof Error
-                    ? mutation.error
-                    : null
-                }
-                isPending={mutation.isPending}
-                onInstall={async (bundlePath) => {
-                  if (!inventory) {
-                    throw new TypeError(
-                      "The Console cannot install a Plugin before Host inventory is available"
-                    );
-                  }
-                  await mutation.mutateAsync({
-                    bundlePath,
-                    expectedStreamId: inventory.streamId,
-                    type: "install",
-                  });
-                }}
-              />
-            </div>
-          </PageHeader.Actions>
+          {agents.length > 1 ? (
+            <select
+              aria-label="Manage Agent"
+              value={selectedAgent.id}
+              onChange={(event) => selectAgent(event.target.value)}
+              {...stylex.props(styles.field)}
+            >
+              {agents.map((agent) => (
+                <option key={agent.id} value={agent.id}>
+                  {agent.label}
+                </option>
+              ))}
+            </select>
+          ) : null}
         </PageHeader.Row>
         <PageHeader.TabsRow xstyle={styles.headerSubrow}>
-          <div aria-hidden="true" {...stylex.props(styles.columns)}>
-            <span>Plugin</span>
-            <span {...stylex.props(styles.packageColumn)}>Package</span>
-            <span>Status</span>
+          <div {...stylex.props(styles.toolbar)}>
+            <Tabs.List aria-label="Plugin categories" xstyle={styles.tabs}>
+              {pluginCategories.map((item) => (
+                <Tabs.Tab key={item.id} value={item.id} xstyle={styles.tab}>
+                  {item.label}
+                  {workbench.data ? (
+                    <span {...stylex.props(styles.count)}>
+                      {item.id === "all"
+                        ? plugins.length
+                        : plugins.filter((plugin) =>
+                            categoriesForPlugin(plugin).includes(item.id)
+                          ).length}
+                    </span>
+                  ) : null}
+                </Tabs.Tab>
+              ))}
+            </Tabs.List>
+            <div {...stylex.props(styles.controls)}>
+              <input
+                type="search"
+                aria-label="Search plugins"
+                placeholder="Search plugins…"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                {...stylex.props(styles.field)}
+              />
+              <select
+                aria-label="Plugin selection"
+                value={selection}
+                onChange={(event) =>
+                  setSelection(event.target.value as PluginSelectionFilter)
+                }
+                {...stylex.props(styles.field)}
+              >
+                <option value="all">All states</option>
+                <option value="enabled">Enabled</option>
+                <option value="disabled">Disabled</option>
+              </select>
+              <PageHeader.Actions>
+                <div {...stylex.props(styles.headerActions)}>
+                  <InstallPluginDialog
+                    disabled={
+                      !workbench.authoringEnabled ||
+                      selectedAgent.role !== "console"
+                    }
+                    error={
+                      mutation.variables?.type === "install" &&
+                      mutation.error instanceof Error
+                        ? mutation.error
+                        : null
+                    }
+                    isPending={mutation.isPending}
+                    onInstall={async (bundlePath) => {
+                      if (!inventory) {
+                        throw new TypeError(
+                          "The Console cannot install a Plugin before Host inventory is available"
+                        );
+                      }
+                      await mutation.mutateAsync({
+                        bundlePath,
+                        expectedStreamId: inventory.streamId,
+                        type: "install",
+                      });
+                    }}
+                  />
+                </div>
+              </PageHeader.Actions>
+            </div>
           </div>
         </PageHeader.TabsRow>
       </PageHeader.Root>
       <h1 id="plugins-heading" {...stylex.props(styles.visuallyHidden)}>
         Plugins
       </h1>
-      {workbench.isPending ? (
-        <WorkbenchState
-          description="Reading the active App configuration."
-          title="Loading Plugins"
-        />
-      ) : workbench.configurationAvailable === false ? (
-        <WorkbenchState
-          description={`${selectedAgent.label} does not provide ${AGENT_PLUGIN_CONFIGURATION_CAPABILITY}, so Console cannot read or change its Plugin configuration.`}
-          title="Plugin configuration unavailable"
-        />
-      ) : workbench.isError ? (
-        <WorkbenchState
-          action={
-            <Button
-              onClick={() => {
-                void workbench.refetch();
-              }}
-              size="compact"
-              variant="secondary"
-            >
-              Try again
-            </Button>
-          }
-          description={
-            workbench.error instanceof Error
-              ? workbench.error.message
-              : "The active App configuration could not be loaded."
-          }
-          title="Plugins unavailable"
-        />
-      ) : !inventory || !workbench.data ? (
-        <WorkbenchState
-          description="Reading the active App configuration."
-          title="Loading Plugins"
-        />
-      ) : plugins.length === 0 ? (
-        <WorkbenchState
-          description="This App does not currently include any Plugins."
-          title="No Plugins installed"
-        />
-      ) : (
-        <section
-          aria-labelledby="plugins-heading"
-          {...stylex.props(styles.tableRegion)}
-        >
-          {plugins.map((plugin) => {
-            const state = pluginStatusPresentation({
-              inventory,
-              item: plugin,
-              mutation: mutation.variables,
-              operation: mutation.operation,
-            });
-            return (
-              <Link
-                key={pluginKey(plugin)}
-                params={{
-                  agentId: selectedAgent.id,
-                  instanceKey: plugin.instanceKey,
-                  packageId: plugin.packageId,
+      <Tabs.Panel value={category} xstyle={styles.tableRegion}>
+        {workbench.isPending ? (
+          <WorkbenchState
+            description="Reading the active App configuration."
+            title="Loading Plugins"
+          />
+        ) : workbench.configurationAvailable === false ? (
+          <WorkbenchState
+            description={`${selectedAgent.label} does not provide ${AGENT_PLUGIN_CONFIGURATION_CAPABILITY}, so Console cannot read or change its Plugin configuration.`}
+            title="Plugin configuration unavailable"
+          />
+        ) : workbench.isError ? (
+          <WorkbenchState
+            action={
+              <Button
+                onClick={() => {
+                  void workbench.refetch();
                 }}
-                to="/plugins/$agentId/$packageId/$instanceKey"
-                {...stylex.props(styles.row)}
+                size="compact"
+                variant="secondary"
               >
-                <span {...stylex.props(styles.identity)}>
-                  <span {...stylex.props(styles.primary)}>
-                    {plugin.packageId}/{plugin.instanceKey}
+                Try again
+              </Button>
+            }
+            description={
+              workbench.error instanceof Error
+                ? workbench.error.message
+                : "The active App configuration could not be loaded."
+            }
+            title="Plugins unavailable"
+          />
+        ) : !inventory || !workbench.data ? (
+          <WorkbenchState
+            description="Reading the active App configuration."
+            title="Loading Plugins"
+          />
+        ) : plugins.length === 0 ? (
+          <WorkbenchState
+            description="This App does not currently include any Plugins."
+            title="No Plugins installed"
+          />
+        ) : visiblePlugins.length === 0 ? (
+          <WorkbenchState
+            title="No matching Plugins"
+            description={`No Plugins match these filters for ${selectedAgent.label}.`}
+            action={
+              <Button
+                size="compact"
+                variant="secondary"
+                onClick={() => {
+                  onCategoryChange("all");
+                  setQuery("");
+                  setSelection("all");
+                }}
+              >
+                Clear filters
+              </Button>
+            }
+          />
+        ) : (
+          <section
+            aria-labelledby="plugins-heading"
+            {...stylex.props(styles.tableRegion)}
+          >
+            <div aria-hidden="true" {...stylex.props(styles.columns)}>
+              <span>Plugin</span>
+              <span {...stylex.props(styles.packageColumn)}>Package</span>
+              <span>Status</span>
+            </div>
+            {visiblePlugins.map((plugin) => {
+              const state = pluginStatusPresentation({
+                inventory,
+                item: plugin,
+                mutation: mutation.variables,
+                operation: mutation.operation,
+              });
+              return (
+                <Link
+                  key={pluginKey(plugin)}
+                  params={{
+                    agentId: selectedAgent.id,
+                    instanceKey: plugin.instanceKey,
+                    packageId: plugin.packageId,
+                  }}
+                  to="/plugins/$agentId/$packageId/$instanceKey"
+                  {...stylex.props(styles.row)}
+                >
+                  <span {...stylex.props(styles.identity)}>
+                    <span {...stylex.props(styles.primary)}>
+                      {plugin.packageId}/{plugin.instanceKey}
+                    </span>
+                    <span {...stylex.props(styles.secondary)}>
+                      {pluginOriginLabel(plugin)}
+                    </span>
                   </span>
-                  <span {...stylex.props(styles.secondary)}>
-                    {pluginOriginLabel(plugin)}
+                  <span
+                    {...stylex.props(styles.identity, styles.packageColumn)}
+                  >
+                    <span {...stylex.props(styles.secondary, styles.mono)}>
+                      {plugin.packageId}
+                    </span>
+                    <span {...stylex.props(styles.secondary)}>
+                      {plugin.active &&
+                      plugin.desired &&
+                      !pluginSelectionIdentityMatches(
+                        plugin.active,
+                        plugin.desired
+                      )
+                        ? `${plugin.active.packageRevision} → ${plugin.desired.packageRevision}`
+                        : plugin.packageRevision || "linked"}
+                    </span>
                   </span>
-                </span>
-                <span {...stylex.props(styles.identity, styles.packageColumn)}>
-                  <span {...stylex.props(styles.secondary, styles.mono)}>
-                    {plugin.packageId}
-                  </span>
-                  <span {...stylex.props(styles.secondary)}>
-                    {plugin.active &&
-                    plugin.desired &&
-                    !pluginSelectionIdentityMatches(
-                      plugin.active,
-                      plugin.desired
-                    )
-                      ? `${plugin.active.packageRevision} → ${plugin.desired.packageRevision}`
-                      : plugin.packageRevision || "linked"}
-                  </span>
-                </span>
-                <PluginStatus state={state} />
-              </Link>
-            );
-          })}
-        </section>
-      )}
-    </div>
+                  <PluginStatus state={state} />
+                </Link>
+              );
+            })}
+          </section>
+        )}
+      </Tabs.Panel>
+    </Tabs.Root>
   );
 }
 
