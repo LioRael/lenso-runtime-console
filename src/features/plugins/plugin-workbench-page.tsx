@@ -2,6 +2,7 @@ import { Breadcrumb } from "@lenso/ui/breadcrumb";
 import { Button } from "@lenso/ui/button";
 import { PageHeader } from "@lenso/ui/page-header";
 import { Tabs } from "@lenso/ui/tabs";
+import { TextField } from "@lenso/ui/text-field";
 import * as stylex from "@stylexjs/stylex";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -22,6 +23,7 @@ import {
   type PluginSelectionFilter,
 } from "./plugin-categories";
 import { PluginDraftNavigationGuard } from "./plugin-draft-navigation-guard";
+import { PluginFilterSelect } from "./plugin-filter-select";
 import {
   pluginOriginLabel,
   pluginSelectionIdentityMatches,
@@ -76,24 +78,7 @@ const styles = stylex.create({
     fontVariantNumeric: "tabular-nums",
   },
   controls: { display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" },
-  field: {
-    backgroundColor: tokens.colorSurfaceCanvas,
-    borderColor: tokens.colorBorderTertiary,
-    borderStyle: "solid",
-    borderWidth: 1,
-    borderRadius: 999,
-    color: tokens.colorContentSecondary,
-    fontFamily: tokens.fontSans,
-    fontSize: 12,
-    minHeight: 30,
-    paddingInline: 10,
-    minWidth: 0,
-    maxWidth: "100%",
-    outline: {
-      default: "none",
-      ":focus-visible": `2px solid ${tokens.colorFocusRing}`,
-    },
-  },
+  search: { width: 200, minWidth: 0, maxWidth: "100%" },
   columns: {
     alignItems: "center",
     color: tokens.colorContentTertiary,
@@ -397,59 +382,47 @@ function AppPluginWorkbench({
         >
           <div {...stylex.props(styles.toolbar)}>
             {targets.length > 1 ? (
-              <select
-                aria-label="Manage App"
+              <PluginFilterSelect
+                label="Manage App"
                 value={selectedApp.id}
-                onChange={(event) => selectApp(event.target.value)}
-                {...stylex.props(styles.field)}
-              >
-                {targets.map((app) => (
-                  <option key={app.id} value={app.id}>
-                    {app.label}
-                  </option>
-                ))}
-              </select>
+                onValueChange={selectApp}
+                options={targets.map((app) => ({
+                  value: app.id,
+                  label: app.label,
+                }))}
+              />
             ) : (
               <span {...stylex.props(styles.primary)}>{selectedApp.label}</span>
             )}
-            <select
-              aria-label="Plugin category"
+            <PluginFilterSelect
+              label="Plugin category"
               value={category}
-              onChange={(event) =>
-                onCategoryChange(event.target.value as PluginCategory)
-              }
-              {...stylex.props(styles.field)}
-            >
-              {pluginCategories.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.label}
-                  {workbench.data
-                    ? ` (${item.id === "all" ? plugins.length : plugins.filter((plugin) => categoriesForPlugin(plugin).includes(item.id)).length})`
-                    : ""}
-                </option>
-              ))}
-            </select>
+              onValueChange={onCategoryChange}
+              options={pluginCategories.map((item) => ({
+                value: item.id,
+                label: `${item.label}${workbench.data ? ` (${item.id === "all" ? plugins.length : plugins.filter((plugin) => categoriesForPlugin(plugin).includes(item.id)).length})` : ""}`,
+              }))}
+            />
             <div {...stylex.props(styles.controls)}>
-              <input
-                type="search"
-                aria-label="Search plugins"
-                placeholder="Search plugins…"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                {...stylex.props(styles.field)}
-              />
-              <select
-                aria-label="Plugin selection"
+              <TextField.Root size="compact" xstyle={styles.search}>
+                <TextField.Control
+                  type="search"
+                  aria-label="Search plugins"
+                  placeholder="Search plugins…"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                />
+              </TextField.Root>
+              <PluginFilterSelect<PluginSelectionFilter>
+                label="Plugin selection"
                 value={selection}
-                onChange={(event) =>
-                  setSelection(event.target.value as PluginSelectionFilter)
-                }
-                {...stylex.props(styles.field)}
-              >
-                <option value="all">All states</option>
-                <option value="enabled">Enabled</option>
-                <option value="disabled">Disabled</option>
-              </select>
+                onValueChange={setSelection}
+                options={[
+                  { value: "all", label: "All states" },
+                  { value: "enabled", label: "Enabled" },
+                  { value: "disabled", label: "Disabled" },
+                ]}
+              />
               <PageHeader.Actions>
                 <div {...stylex.props(styles.headerActions)}>
                   {selectedApp.localBundleInstall ? (

@@ -60,9 +60,10 @@ test("manages non-Agent Apps without an Agent identity provider and keeps all sc
     await expect
       .element(page.getByRole("tab", { name: "App plugins", exact: true }))
       .toHaveAttribute("aria-selected", "true");
+    await page.getByRole("combobox", { name: "Manage App" }).click();
     await page
-      .getByRole("combobox", { name: "Manage App" })
-      .selectOptions("support");
+      .getByRole("option", { name: "Support App", exact: true })
+      .click();
     const plugin = page
       .getByRole("link")
       .filter({ hasText: "example.support.tickets/default" });
