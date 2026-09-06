@@ -7,11 +7,10 @@ import { Boxes } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { lensoUiTokens as tokens } from "../../lenso-ui-token-refs.stylex";
-import { useAgentIdentity } from "../agent/agent-identity-context";
 import {
-  AGENT_PLUGIN_CONFIGURATION_CAPABILITY,
-  type AgentIdentity,
-} from "../agent/agent-runtime";
+  useAppManagement,
+  type ManagedApp,
+} from "../apps/app-management-context";
 import { usePluginAgentWorkbench } from "./plugin-agent-workbench-context";
 import { applyPluginWorkbenchRequest } from "./plugin-agent-workbench-request";
 import { PluginDraftNavigationGuard } from "./plugin-draft-navigation-guard";
@@ -106,58 +105,61 @@ export function PluginDetailPage({
   instanceKey: string;
   packageId: string;
 }) {
-  const { agents, selectAgent, selectedAgent } = useAgentIdentity();
-  const routedAgent = agents.find((agent) => agent.id === agentId);
+  const { apps, selectApp, selectedApp, catalog } = useAppManagement();
+  const routedApp = apps.find((agent) => agent.id === agentId);
   useEffect(() => {
-    if (routedAgent && routedAgent.id !== selectedAgent.id) {
-      selectAgent(routedAgent.id);
+    if (routedApp && routedApp.id !== selectedApp?.id) {
+      selectApp(routedApp.id);
     }
-  }, [routedAgent, selectAgent, selectedAgent.id]);
+  }, [routedApp, selectApp, selectedApp?.id]);
 
-  if (!routedAgent) {
+  if (catalog.isPending) {
+    return (
+      <DetailState
+        title="Loading App"
+        description="Reading management targets."
+      />
+    );
+  }
+  if (!routedApp) {
     return (
       <PluginDetailShell instanceKey={instanceKey} packageId={packageId}>
         <DetailState
           action={<BackToPlugins />}
-          description="This Agent is no longer available in Console."
-          title="Agent unavailable"
+          description="This App management target is no longer available in Console."
+          title="App unavailable"
         />
       </PluginDetailShell>
     );
   }
 
   return (
-    <AgentPluginDetail
+    <AppPluginDetail
       instanceKey={instanceKey}
-      key={`${routedAgent.id}/${packageId}/${instanceKey}`}
+      key={`${routedApp.id}/${packageId}/${instanceKey}`}
       packageId={packageId}
-      selectedAgent={routedAgent}
+      selectedApp={routedApp}
     />
   );
 }
 
-function AgentPluginDetail({
+function AppPluginDetail({
   instanceKey,
   packageId,
-  selectedAgent,
+  selectedApp,
 }: {
   instanceKey: string;
   packageId: string;
-  selectedAgent: AgentIdentity;
+  selectedApp: ManagedApp;
 }) {
-  const configurationAvailable = selectedAgent.capabilities.includes(
-    AGENT_PLUGIN_CONFIGURATION_CAPABILITY
-  );
-  const workbench = usePluginWorkbench(
-    selectedAgent.id,
-    configurationAvailable
-  );
+  const configurationAvailable = selectedApp.pluginConfiguration;
+  const workbench = usePluginWorkbench(selectedApp.id, configurationAvailable);
   const inventory = workbench.data?.inventory;
   const plugin = workbench.data?.items.find(
     (item) => item.packageId === packageId && item.instanceKey === instanceKey
   );
   const configurationDraftStore = usePluginConfigurationDraftStore();
-  const mutation = usePluginMutation(selectedAgent.id, inventory?.streamId);
+  const mutation = usePluginMutation(selectedApp.id, inventory?.streamId);
   const { completeRequest, request } = usePluginAgentWorkbench();
   const appliedRequestId = useRef(0);
   const [workbenchNotice, setWorkbenchNotice] = useState<string | null>(null);
@@ -175,7 +177,7 @@ function AgentPluginDetail({
     if (
       !request ||
       request.id === appliedRequestId.current ||
-      request.agentId !== selectedAgent.id ||
+      request.agentId !== selectedApp.id ||
       !workbench.data
     ) {
       return;
@@ -198,14 +200,25 @@ function AgentPluginDetail({
     instanceKey,
     packageId,
     request,
-    selectedAgent.id,
+    selectedApp.id,
     workbench.data,
   ]);
 
   return (
-    <PluginDetailShell instanceKey={instanceKey} packageId={packageId} withTabs>
+    <PluginDetailShell
+      instanceKey={instanceKey}
+      packageId={packageId}
+      targetLabel={selectedApp.label}
+      withTabs
+    >
       <PluginDraftNavigationGuard store={configurationDraftStore} />
-      {workbench.isPending ? (
+      {configurationAvailable === false ? (
+        <DetailState
+          action={<BackToPlugins />}
+          title="Plugin management unavailable"
+          description={`${selectedApp.label} does not expose Plugin configuration management.`}
+        />
+      ) : workbench.isPending ? (
         <DetailState
           description="Reading the active App configuration."
           title="Loading Plugin"
@@ -213,7 +226,7 @@ function AgentPluginDetail({
       ) : workbench.configurationAvailable === false ? (
         <DetailState
           action={<BackToPlugins />}
-          description={`${selectedAgent.label} does not provide ${AGENT_PLUGIN_CONFIGURATION_CAPABILITY}, so Console cannot read or change its Plugin configuration.`}
+          description={`${selectedApp.label} does not expose Plugin configuration management.`}
           title="Plugin configuration unavailable"
         />
       ) : workbench.isError ? (
@@ -248,7 +261,8 @@ function AgentPluginDetail({
               </output>
             ) : null}
             <PluginDetail
-              agentId={selectedAgent.id}
+              agentId={selectedApp.id}
+              agentAssistanceAvailable={selectedApp.agentId !== null}
               authoringEnabled={workbench.authoringEnabled}
               configurationDraftStore={configurationDraftStore}
               inventory={inventory}
@@ -279,11 +293,13 @@ function PluginDetailShell({
   instanceKey,
   packageId,
   withTabs = false,
+  targetLabel = "Lenso",
 }: {
   children: ReactNode;
   instanceKey: string;
   packageId: string;
   withTabs?: boolean;
+  targetLabel?: string;
 }) {
   const shell = (
     <>
@@ -300,7 +316,7 @@ function PluginDetailShell({
                   <Breadcrumb.Icon>
                     <Boxes size={14} strokeWidth={1.75} />
                   </Breadcrumb.Icon>
-                  Lenso
+                  {targetLabel}
                 </Breadcrumb.Link>
               </Breadcrumb.Item>
               <Breadcrumb.Separator xstyle={styles.breadcrumbParent} />

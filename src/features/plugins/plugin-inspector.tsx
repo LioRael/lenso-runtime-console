@@ -285,6 +285,7 @@ const styles = stylex.create({
 });
 
 export function PluginDetail({
+  agentAssistanceAvailable = true,
   agentId,
   authoringEnabled,
   configurationDraftStore,
@@ -293,6 +294,7 @@ export function PluginDetail({
   mutation,
   plugin,
 }: {
+  agentAssistanceAvailable?: boolean;
   agentId: string;
   authoringEnabled: boolean;
   configurationDraftStore: PluginConfigurationDraftStore;
@@ -367,7 +369,7 @@ export function PluginDetail({
           </span>
         </div>
         <div {...stylex.props(styles.detailActions)}>
-          {authoringEnabled ? (
+          {authoringEnabled && agentAssistanceAvailable ? (
             <PluginAgentAction
               instanceKey={plugin.instanceKey}
               managementRevision={pluginManagement.revision}

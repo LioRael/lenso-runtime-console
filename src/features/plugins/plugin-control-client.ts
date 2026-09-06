@@ -599,8 +599,6 @@ function pluginInstancePath(
   )}/${encodeURIComponent(instanceKey)}`;
 }
 
-function agentApiBase(agentId: string) {
-  return agentId === "console"
-    ? "api/console/v1/agent"
-    : `api/console/v1/agents/${encodeURIComponent(agentId)}`;
+function agentApiBase(appId: string) {
+  return `api/console/v1/apps/${encodeURIComponent(appId)}`;
 }
