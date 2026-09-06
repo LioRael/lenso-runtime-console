@@ -16,7 +16,9 @@
     },
     "allowed_tools": {
       "description": "Reviewed model-visible Tools admitted to the Console Agent.",
-      "items": { "type": "string" },
+      "items": {
+        "type": "string"
+      },
       "type": "array"
     },
     "connected_agent_label": {
@@ -44,13 +46,45 @@
       "type": "string"
     },
     "trusted_plugin_bundles": {
-      "additionalProperties": { "type": "string" },
+      "additionalProperties": {
+        "type": "string"
+      },
       "description": "Host-private trusted Bundle catalog keyed by opaque entry ID. Paths resolve from the launcher directory and are never exposed to Console Agent.",
       "type": "object"
     },
     "web_root": {
       "description": "Directory containing the built Console Shell index.html.",
       "type": "string"
+    },
+    "managed_apps": {
+      "type": "array",
+      "description": "Explicit Plugin management connections for non-Agent Apps and the Console extension authority. These targets do not become conversational Agents.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "label", "origin"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9._-]{0,63}$"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1
+          },
+          "origin": {
+            "type": "string"
+          },
+          "consoleExtensions": {
+            "type": "boolean",
+            "default": false
+          },
+          "controlTokenEnv": {
+            "type": ["string", "null"]
+          }
+        }
+      },
+      "default": []
     }
   },
   "required": [

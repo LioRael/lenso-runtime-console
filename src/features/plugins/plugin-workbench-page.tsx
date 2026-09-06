@@ -4,15 +4,14 @@ import { PageHeader } from "@lenso/ui/page-header";
 import { Tabs } from "@lenso/ui/tabs";
 import * as stylex from "@stylexjs/stylex";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Boxes } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { lensoUiTokens as tokens } from "../../lenso-ui-token-refs.stylex";
-import { useAgentIdentity } from "../agent/agent-identity-context";
 import {
-  AGENT_PLUGIN_CONFIGURATION_CAPABILITY,
-  type AgentIdentity,
-} from "../agent/agent-runtime";
+  useAppManagement,
+  pluginScopes,
+  type ManagedApp,
+} from "../apps/app-management-context";
 import { usePluginAgentWorkbench } from "./plugin-agent-workbench-context";
 import { applyPluginWorkbenchRequest } from "./plugin-agent-workbench-request";
 import {
@@ -60,14 +59,15 @@ const styles = stylex.create({
     minHeight: 30,
     paddingInline: 12,
     flexShrink: 0,
-    backgroundColor: {
-      default: tokens.colorSurfaceCanvas,
-      ":is([data-active])": tokens.colorSurfaceSelected,
-    },
+    backgroundColor: tokens.colorSurfaceCanvas,
     borderWidth: 1,
     borderStyle: "solid",
     borderColor: tokens.colorBorderTertiary,
-    ":is([data-active])": { borderColor: "transparent" },
+  },
+  tabActive: {
+    backgroundColor: tokens.colorSurfaceSelected,
+    borderColor: "transparent",
+    color: tokens.colorContentPrimary,
   },
   count: {
     color: tokens.colorContentTertiary,
@@ -227,47 +227,107 @@ const styles = stylex.create({
 });
 
 export function PluginWorkbenchPage() {
-  const { agents, selectAgent, selectedAgent } = useAgentIdentity();
+  const { apps, selectApp, selectedApp, scope, setScope, catalog } =
+    useAppManagement();
   const { request } = usePluginAgentWorkbench();
   const [category, setCategory] = useState<PluginCategory>("all");
   useEffect(() => {
     if (
       request &&
-      request.agentId !== selectedAgent.id &&
-      agents.some((agent) => agent.id === request.agentId)
+      request.agentId !== selectedApp?.id &&
+      apps.some((agent) => agent.id === request.agentId)
     ) {
-      selectAgent(request.agentId);
+      selectApp(request.agentId);
     }
-  }, [agents, request, selectAgent, selectedAgent.id]);
+  }, [apps, request, selectApp, selectedApp?.id]);
   return (
-    <AgentPluginWorkbench
-      key={selectedAgent.id}
-      selectedAgent={selectedAgent}
-      category={category}
-      onCategoryChange={setCategory}
-    />
+    <Tabs.Root
+      value={scope}
+      onValueChange={(value) => setScope(value as typeof scope)}
+      data-page="plugin-workbench"
+      xstyle={styles.page}
+    >
+      <PageHeader.Root
+        aria-label="Plugin navigation"
+        variant="team"
+        xstyle={styles.header}
+      >
+        <PageHeader.Row>
+          <Breadcrumb.Root>
+            <Breadcrumb.List>
+              <Breadcrumb.Item>
+                <Breadcrumb.Page>Plugins</Breadcrumb.Page>
+              </Breadcrumb.Item>
+            </Breadcrumb.List>
+          </Breadcrumb.Root>
+        </PageHeader.Row>
+        <PageHeader.TabsRow xstyle={styles.headerSubrow}>
+          <Tabs.List aria-label="Plugin scope" xstyle={styles.tabs}>
+            {pluginScopes.map((item) => (
+              <Tabs.Tab
+                key={item.id}
+                value={item.id}
+                xstyle={[styles.tab, scope === item.id && styles.tabActive]}
+              >
+                {item.label}
+              </Tabs.Tab>
+            ))}
+          </Tabs.List>
+        </PageHeader.TabsRow>
+      </PageHeader.Root>
+      <Tabs.Panel value={scope} xstyle={styles.tableRegion}>
+        {catalog.isPending ? (
+          <WorkbenchState
+            title="Loading Apps"
+            description="Reading management targets."
+          />
+        ) : catalog.isError ? (
+          <WorkbenchState
+            title="Apps unavailable"
+            description="The App management catalog could not be loaded."
+            action={
+              <Button
+                onClick={() => {
+                  void catalog.refetch();
+                }}
+              >
+                Try again
+              </Button>
+            }
+          />
+        ) : selectedApp ? (
+          <AppPluginWorkbench
+            key={selectedApp.id}
+            selectedApp={selectedApp}
+            category={category}
+            onCategoryChange={setCategory}
+          />
+        ) : (
+          <WorkbenchState
+            title="No Apps connected"
+            description="Connect a Lenso App to manage its plugins here."
+          />
+        )}
+      </Tabs.Panel>
+    </Tabs.Root>
   );
 }
 
-function AgentPluginWorkbench({
+function AppPluginWorkbench({
   category,
   onCategoryChange,
-  selectedAgent,
+  selectedApp,
 }: {
-  selectedAgent: AgentIdentity;
+  selectedApp: ManagedApp;
   category: PluginCategory;
   onCategoryChange: (category: PluginCategory) => void;
 }) {
-  const { agents, selectAgent } = useAgentIdentity();
+  const { apps, selectApp, scope } = useAppManagement();
+  const targets = apps.filter((app) => app.scope === scope);
   const [query, setQuery] = useState("");
   const [selection, setSelection] = useState<PluginSelectionFilter>("all");
-  const configurationAvailable = selectedAgent.capabilities.includes(
-    AGENT_PLUGIN_CONFIGURATION_CAPABILITY
-  );
-  const workbench = usePluginWorkbench(
-    selectedAgent.id,
-    configurationAvailable
-  );
+  const configurationAvailable = selectedApp.pluginConfiguration;
+  const workbench = usePluginWorkbench(selectedApp.id, configurationAvailable);
   const plugins = workbench.data?.items ?? EMPTY_PLUGIN_ITEMS;
   const visiblePlugins = plugins.filter((plugin) =>
     matchesPluginFilters(plugin, category, query, selection)
@@ -289,7 +349,7 @@ function AgentPluginWorkbench({
     if (
       !request ||
       request.id === appliedRequestId.current ||
-      request.agentId !== selectedAgent.id ||
+      request.agentId !== selectedApp.id ||
       !workbench.data
     ) {
       return;
@@ -311,7 +371,7 @@ function AgentPluginWorkbench({
       completeRequest(request.id);
       navigate({
         params: {
-          agentId: selectedAgent.id,
+          agentId: selectedApp.id,
           instanceKey: requestedPlugin.instanceKey,
           packageId: requestedPlugin.packageId,
         },
@@ -323,74 +383,52 @@ function AgentPluginWorkbench({
     completeRequest,
     navigate,
     request,
-    selectedAgent.id,
+    selectedApp.id,
     workbench.data,
   ]);
-  const mutation = usePluginMutation(selectedAgent.id, inventory?.streamId);
+  const mutation = usePluginMutation(selectedApp.id, inventory?.streamId);
   return (
-    <Tabs.Root
-      value={category}
-      onValueChange={(value) => onCategoryChange(value as PluginCategory)}
-      data-page="plugin-workbench"
-      xstyle={styles.page}
-    >
+    <div {...stylex.props(styles.page)}>
       <PluginDraftNavigationGuard store={configurationDraftStore} />
-      <PageHeader.Root
-        aria-label="Plugin navigation"
-        xstyle={styles.header}
-        variant="team"
-      >
-        <PageHeader.Row>
-          <Breadcrumb.Root aria-label="Plugin breadcrumb">
-            <Breadcrumb.List>
-              <Breadcrumb.Item xstyle={styles.breadcrumbParent}>
-                <Breadcrumb.Link nativeButton={false} render={<Link to="/" />}>
-                  <Breadcrumb.Icon>
-                    <Boxes size={14} strokeWidth={1.75} />
-                  </Breadcrumb.Icon>
-                  {selectedAgent.label}
-                </Breadcrumb.Link>
-              </Breadcrumb.Item>
-              <Breadcrumb.Separator xstyle={styles.breadcrumbParent} />
-              <Breadcrumb.Item>
-                <Breadcrumb.Page>Plugins</Breadcrumb.Page>
-              </Breadcrumb.Item>
-            </Breadcrumb.List>
-          </Breadcrumb.Root>
-          <PageHeader.Spacer />
-          {agents.length > 1 ? (
+      {configurationAvailable ? (
+        <div
+          aria-label="Plugin filters"
+          {...stylex.props(styles.header, styles.headerSubrow)}
+        >
+          <div {...stylex.props(styles.toolbar)}>
+            {targets.length > 1 ? (
+              <select
+                aria-label="Manage App"
+                value={selectedApp.id}
+                onChange={(event) => selectApp(event.target.value)}
+                {...stylex.props(styles.field)}
+              >
+                {targets.map((app) => (
+                  <option key={app.id} value={app.id}>
+                    {app.label}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <span {...stylex.props(styles.primary)}>{selectedApp.label}</span>
+            )}
             <select
-              aria-label="Manage Agent"
-              value={selectedAgent.id}
-              onChange={(event) => selectAgent(event.target.value)}
+              aria-label="Plugin category"
+              value={category}
+              onChange={(event) =>
+                onCategoryChange(event.target.value as PluginCategory)
+              }
               {...stylex.props(styles.field)}
             >
-              {agents.map((agent) => (
-                <option key={agent.id} value={agent.id}>
-                  {agent.label}
+              {pluginCategories.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.label}
+                  {workbench.data
+                    ? ` (${item.id === "all" ? plugins.length : plugins.filter((plugin) => categoriesForPlugin(plugin).includes(item.id)).length})`
+                    : ""}
                 </option>
               ))}
             </select>
-          ) : null}
-        </PageHeader.Row>
-        <PageHeader.TabsRow xstyle={styles.headerSubrow}>
-          <div {...stylex.props(styles.toolbar)}>
-            <Tabs.List aria-label="Plugin categories" xstyle={styles.tabs}>
-              {pluginCategories.map((item) => (
-                <Tabs.Tab key={item.id} value={item.id} xstyle={styles.tab}>
-                  {item.label}
-                  {workbench.data ? (
-                    <span {...stylex.props(styles.count)}>
-                      {item.id === "all"
-                        ? plugins.length
-                        : plugins.filter((plugin) =>
-                            categoriesForPlugin(plugin).includes(item.id)
-                          ).length}
-                    </span>
-                  ) : null}
-                </Tabs.Tab>
-              ))}
-            </Tabs.List>
             <div {...stylex.props(styles.controls)}>
               <input
                 type="search"
@@ -414,49 +452,64 @@ function AgentPluginWorkbench({
               </select>
               <PageHeader.Actions>
                 <div {...stylex.props(styles.headerActions)}>
-                  <InstallPluginDialog
-                    disabled={
-                      !workbench.authoringEnabled ||
-                      selectedAgent.role !== "console"
-                    }
-                    error={
-                      mutation.variables?.type === "install" &&
-                      mutation.error instanceof Error
-                        ? mutation.error
-                        : null
-                    }
-                    isPending={mutation.isPending}
-                    onInstall={async (bundlePath) => {
-                      if (!inventory) {
-                        throw new TypeError(
-                          "The Console cannot install a Plugin before Host inventory is available"
-                        );
+                  {selectedApp.localBundleInstall ? (
+                    <InstallPluginDialog
+                      disabled={
+                        !workbench.authoringEnabled ||
+                        !selectedApp.localBundleInstall
                       }
-                      await mutation.mutateAsync({
-                        bundlePath,
-                        expectedStreamId: inventory.streamId,
-                        type: "install",
-                      });
-                    }}
-                  />
+                      error={
+                        mutation.variables?.type === "install" &&
+                        mutation.error instanceof Error
+                          ? mutation.error
+                          : null
+                      }
+                      isPending={mutation.isPending}
+                      onInstall={async (bundlePath) => {
+                        if (!inventory) {
+                          throw new TypeError(
+                            "The Console cannot install a Plugin before Host inventory is available"
+                          );
+                        }
+                        await mutation.mutateAsync({
+                          bundlePath,
+                          expectedStreamId: inventory.streamId,
+                          type: "install",
+                        });
+                      }}
+                    />
+                  ) : null}
                 </div>
               </PageHeader.Actions>
             </div>
           </div>
-        </PageHeader.TabsRow>
-      </PageHeader.Root>
+        </div>
+      ) : null}
       <h1 id="plugins-heading" {...stylex.props(styles.visuallyHidden)}>
         Plugins
       </h1>
-      <Tabs.Panel value={category} xstyle={styles.tableRegion}>
-        {workbench.isPending ? (
+      <div {...stylex.props(styles.tableRegion)}>
+        {configurationAvailable === false ? (
+          <WorkbenchState
+            title="Plugin management unavailable"
+            description={
+              selectedApp.scope === "console-extensions"
+                ? "Console has no connected extension management authority. Management Agent plugins are managed separately."
+                : `${selectedApp.label} does not expose Plugin configuration management.`
+            }
+          />
+        ) : workbench.isPending ? (
           <WorkbenchState
             description="Reading the active App configuration."
             title="Loading Plugins"
           />
         ) : workbench.configurationAvailable === false ? (
           <WorkbenchState
-            description={`${selectedAgent.label} does not provide ${AGENT_PLUGIN_CONFIGURATION_CAPABILITY}, so Console cannot read or change its Plugin configuration.`}
+            description={
+              selectedApp.scope === "console-extensions"
+                ? "Console has no connected extension management authority. Management Agent plugins are managed separately."
+                : `${selectedApp.label} does not expose Plugin configuration management.`
+            }
             title="Plugin configuration unavailable"
           />
         ) : workbench.isError ? (
@@ -492,7 +545,7 @@ function AgentPluginWorkbench({
         ) : visiblePlugins.length === 0 ? (
           <WorkbenchState
             title="No matching Plugins"
-            description={`No Plugins match these filters for ${selectedAgent.label}.`}
+            description={`No Plugins match these filters for ${selectedApp.label}.`}
             action={
               <Button
                 size="compact"
@@ -528,7 +581,7 @@ function AgentPluginWorkbench({
                 <Link
                   key={pluginKey(plugin)}
                   params={{
-                    agentId: selectedAgent.id,
+                    agentId: selectedApp.id,
                     instanceKey: plugin.instanceKey,
                     packageId: plugin.packageId,
                   }}
@@ -566,8 +619,8 @@ function AgentPluginWorkbench({
             })}
           </section>
         )}
-      </Tabs.Panel>
-    </Tabs.Root>
+      </div>
+    </div>
   );
 }
 

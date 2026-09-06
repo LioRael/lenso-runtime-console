@@ -3,6 +3,7 @@ import type { PropsWithChildren } from "react";
 
 import { AgentIdentityProvider } from "../features/agent/agent-identity-context";
 import { AgentQuickPanelProvider } from "../features/agent/agent-quick-panel-context";
+import { AppManagementProvider } from "../features/apps/app-management-context";
 import { PluginAgentWorkbenchProvider } from "../features/plugins/plugin-agent-workbench-context";
 import { queryClient } from "../lib/query-client";
 import { ConsoleAppearanceProvider } from "./console-appearance";
@@ -11,11 +12,13 @@ export function Providers({ children }: PropsWithChildren) {
   return (
     <QueryClientProvider client={queryClient}>
       <AgentIdentityProvider>
-        <PluginAgentWorkbenchProvider>
-          <AgentQuickPanelProvider>
-            <ConsoleAppearanceProvider>{children}</ConsoleAppearanceProvider>
-          </AgentQuickPanelProvider>
-        </PluginAgentWorkbenchProvider>
+        <AppManagementProvider>
+          <PluginAgentWorkbenchProvider>
+            <AgentQuickPanelProvider>
+              <ConsoleAppearanceProvider>{children}</ConsoleAppearanceProvider>
+            </AgentQuickPanelProvider>
+          </PluginAgentWorkbenchProvider>
+        </AppManagementProvider>
       </AgentIdentityProvider>
     </QueryClientProvider>
   );

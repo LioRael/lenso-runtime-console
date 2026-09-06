@@ -33,9 +33,9 @@ import {
   decodePluginConfigurationProposal,
   decodePluginConfigurationRollbackProposal,
 } from "./plugin-control-contract";
+import { demoPluginState } from "./plugin-demo-state";
 import type { PluginOperation } from "./plugin-operation";
 import {
-  demoPluginInventory,
   demoPluginConfigurationHistory,
   demoPluginManagement,
   mergePluginInventory,
@@ -160,7 +160,7 @@ export function usePluginWorkbench(
     enabled: configurationAvailable,
     queryFn: ({ signal }) => {
       if (!isApiMode()) {
-        return Promise.resolve(demoPluginInventory);
+        return Promise.resolve(demoPluginState(agentId).inventory);
       }
       const previous = queryClient.getQueryData<PluginInventory>(
         pluginInventoryQueryKey(agentId)
@@ -184,7 +184,7 @@ export function usePluginWorkbench(
     placeholderData: (previous) => previous,
     queryFn: async ({ signal }) => {
       if (!isApiMode()) {
-        return demoPluginManagement;
+        return demoPluginState(agentId).management;
       }
       const currentValidator = managementValidator.current;
       const validator =

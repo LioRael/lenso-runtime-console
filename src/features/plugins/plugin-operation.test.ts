@@ -171,7 +171,7 @@ describe("Plugin operation lifecycle", () => {
     );
 
     expect(request.mock.calls[0]?.[0]).toBe(
-      "api/console/v1/agents/support-agent/control/plugins"
+      "api/console/v1/apps/support-agent/control/plugins"
     );
   });
 

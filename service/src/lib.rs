@@ -1,3 +1,6 @@
+mod app_management;
+pub use app_management::{ManagedAppAdapter, ManagedAppConnection};
+
 use std::{
     collections::BTreeMap,
     future::Future,
@@ -93,6 +96,8 @@ pub struct ConsolePluginConfig {
     connected_agent_plugin_configuration: bool,
     connected_agent_plugin_lifecycle: bool,
     connected_agent_url: String,
+    #[serde(default)]
+    managed_apps: Vec<ManagedAppConnection>,
     managed_app_root: String,
     trusted_plugin_bundles: BTreeMap<String, String>,
     web_root: String,
@@ -176,6 +181,7 @@ pub struct ConsoleConfig {
     pub managed_app_root: PathBuf,
     pub allowed_tools: Vec<String>,
     pub app_agents: Vec<AppAgentAdapter>,
+    pub managed_apps: Vec<ManagedAppAdapter>,
     console_agent: AppAgentAdapter,
     pub agent_configuration_store: PathBuf,
     pub tool_policy: PathBuf,
@@ -184,6 +190,13 @@ pub struct ConsoleConfig {
 }
 
 impl ConsoleConfig {
+    pub fn with_managed_app(mut self, connection: &ManagedAppConnection) -> anyhow::Result<Self> {
+        self.managed_apps
+            .push(ManagedAppAdapter::connect(connection)?);
+        app_management::validate_connections(&self.app_agents, &self.managed_apps)?;
+        Ok(self)
+    }
+
     /// Selects the separately released Console Agent process and its Host-only control token.
     pub fn with_console_agent(
         mut self,
@@ -349,6 +362,11 @@ impl ConsoleConfig {
                 console_agent_control_token(),
             )?,
             app_agents,
+            managed_apps: config
+                .managed_apps
+                .iter()
+                .map(ManagedAppAdapter::connect)
+                .collect::<anyhow::Result<_>>()?,
             web_root: resolve_path(&current, &config.web_root),
         })
     }
@@ -422,11 +440,20 @@ impl ConsoleConfig {
                     agent
                 })
                 .collect(),
+            managed_apps: match std::env::var("LENSO_CONSOLE_MANAGED_APPS") {
+                Ok(value) => serde_json::from_str::<Vec<ManagedAppConnection>>(&value)?
+                    .iter()
+                    .map(ManagedAppAdapter::connect)
+                    .collect::<anyhow::Result<_>>()?,
+                Err(std::env::VarError::NotPresent) => Vec::new(),
+                Err(error) => return Err(error.into()),
+            },
             web_root,
         })
     }
 
     pub fn validate(&self) -> anyhow::Result<()> {
+        app_management::validate_connections(&self.app_agents, &self.managed_apps)?;
         anyhow::ensure!(
             self.address.ip().is_loopback(),
             "the local Console Agent Host may bind only to a loopback address"
@@ -496,6 +523,10 @@ impl ConsoleServer {
             .route("/health/live", get(health))
             .route("/health/ready", get(health))
             .route("/health/startup", get(health))
+            .merge(app_management::routes(app_management::AppCatalog {
+                agents: agent_catalog.clone(),
+                apps: config.managed_apps,
+            }))
             .merge(agent_catalog_routes(agent_catalog))
             .route("/api/{*path}", any(api_not_found))
             .fallback_service(shell);
@@ -733,8 +764,29 @@ async fn proxy_agent_request(
     headers: HeaderMap,
     body: Bytes,
 ) -> Response {
+    proxy_request_at(
+        app_agent,
+        "/api/console/v1/agent",
+        path,
+        incoming,
+        method,
+        headers,
+        body,
+    )
+    .await
+}
+
+async fn proxy_request_at(
+    app_agent: AppAgentAdapter,
+    base: &str,
+    path: String,
+    incoming: axum::http::Uri,
+    method: Method,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
     let mut target_url = app_agent.origin;
-    target_url.set_path(&format!("/api/console/v1/agent/{path}"));
+    target_url.set_path(&format!("{base}/{path}"));
     target_url.set_query(incoming.query());
     let mut request = app_agent.client.request(method, target_url).body(body);
     for name in [header::ACCEPT, header::CONTENT_TYPE, header::IF_NONE_MATCH] {
