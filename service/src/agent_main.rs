@@ -39,6 +39,22 @@ async fn run() -> anyhow::Result<()> {
         .env("LENSO_AGENT_HOME", agent_home()?)
         .env("LENSO_AGENT_CONTROL_TOKEN", &control_token);
     configure_app_agent_authority(&mut app_command)?;
+    if let Ok(profile) = std::env::var("LENSO_AGENT_PROFILE") {
+        anyhow::ensure!(
+            !profile.trim().is_empty(),
+            "LENSO_AGENT_PROFILE must not be empty"
+        );
+        app_command.arg("--profile").arg(profile);
+    }
+    if let Ok(tools) = std::env::var("LENSO_AGENT_TOOLS") {
+        for tool in tools
+            .split(',')
+            .map(str::trim)
+            .filter(|tool| !tool.is_empty())
+        {
+            app_command.arg("--allow-tool").arg(tool);
+        }
+    }
     append_trusted_bundles(&mut app_command, "LENSO_AGENT_TRUSTED_PLUGIN_BUNDLES")?;
 
     let mut console_command = Command::new(&console_agent_binary);

@@ -862,6 +862,7 @@ fn allowed_agent_route_with_capabilities(
                 "answer",
             ],
         ) => valid_agent_identity(request_id) && valid_agent_identity(interaction_id),
+        (&Method::POST, ["control", "profile"]) => plugin_configuration,
         _ if plugin_configuration
             && allowed_plugin_configuration_route(method, parts.as_slice()) =>
         {
@@ -1139,6 +1140,12 @@ mod tests {
         }
         assert!(!allowed_agent_route(&Method::GET, "control/plugins", false));
         assert!(allowed_agent_route(&Method::GET, "control/plugins", true));
+        assert!(allowed_agent_route(&Method::POST, "control/profile", true));
+        assert!(!allowed_agent_route(
+            &Method::POST,
+            "control/profile",
+            false
+        ));
         assert!(!allowed_agent_route(
             &Method::GET,
             "../control/plugins",

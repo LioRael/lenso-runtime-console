@@ -471,7 +471,7 @@ function AppPluginWorkbench({
                 : `${selectedApp.label} does not expose Plugin configuration management.`
             }
           />
-        ) : workbench.isPending ? (
+        ) : workbench.isPending && !workbench.isError ? (
           <WorkbenchState
             description="Reading the active App configuration."
             title="Loading Plugins"
