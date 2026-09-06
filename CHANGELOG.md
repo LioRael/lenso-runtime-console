@@ -1,5 +1,77 @@
 ## @lenso/console-web@0.1.7
 
+## 1.2.0
+
+### Minor Changes
+
+- 5a1a8e1: Connect Agent settings to the selected Agent's Plugin configuration and live
+  context catalog. Replace placeholder guidance, skill creation, MCP access and
+  billing controls with provider-owned settings and explicit availability states.
+  Keep App Agent Tool access read-only without exposing Host control endpoints.
+  Align Agent settings with Preferences using shared page styles and Lenso UI
+  settings rows, consistent grouping, spacing and explicit empty/error states.
+- 4d2f003: Add negotiated Agent controls for model, reasoning effort, service tier, mode,
+  per-Turn Tool scope, Session compaction and rename, queued prompts, child-task
+  supervision, reliable scroll follow, and Web-scoped Context Source suggestions.
+  Add Web Terminal command discovery, slash suggestions, cancellable execution,
+  and streamed command output backed by the active App Generation.
+- 53d820d: Manage capability-owned account connections from Agent settings, including sign-in progress, cancellation, and disconnect. Keep authentication management separate from chat and Plugin configuration permissions.
+- 14364db: Remove the retired Console service, Story, dynamic Module UI, Access, and
+  Composition architecture. Keep the Console focused on Agent conversations,
+  trajectory, history, preferences, and Harness-backed Tool Policy controls.
+- c4e3067: Show unsaved configuration changes, allow discarding local edits without changing Host configuration, and protect drafts when leaving or refreshing the Plugin page. Fields and Advanced continue to share the same draft.
+- 8465831: Show configuration field ownership states and restore individual inherited values without rewriting sibling defaults. Present native input constraint errors beside editable fields while preserving authority-owned validation at proposal time.
+- 7fd8680: Group configuration fields using titled allOf schema branches, with searchable section headings and unchanged configuration values.
+- 79ca7ed: Search configuration fields by schema name, path, title and description while retaining their object groups and editing state. Stored values are never searched.
+- 8eff34b: Edit multiline Plugin configuration strings directly in Fields. Existing multiline text and multiline paste use a Lenso UI text area, and single-line fields can be expanded without changing their values.
+- 8045d66: Render locally referenced and nullable configuration schemas in Fields, retaining Advanced editing for unresolved or recursive references. Nullable fields edit the concrete value without inventing a TOML null representation.
+
+  Add explicit oneOf/anyOf form selection using Lenso UI. Selecting a variant writes only required constants and preserves other configuration fields; protected and unsupported variants remain in Advanced.
+
+- f1e6e01: Let a Harness launch Console as its Web UI and switch Agent conversations
+  between the connected Harness and Console's private Agent. Preserve production
+  Tab styling by declaring the CSS layer order before generated stylesheets.
+- 1d3b7ea: Replace the built-in/connected mode switch with catalog-derived full Agent
+  identities. Qualify Session navigation and caches by the owning Agent while
+  preserving separate Console Agent and App Agent state.
+
+  Make the Console Host select a durable SQLite configuration authority for the
+  Console Agent, including revision-fenced publication, history, rollback, and
+  restart recovery instead of browser-owned configuration state. Keep the
+  separate managed App outside that authority until it supplies an explicit
+  configuration Capability. Allow an App Agent Host to opt into
+  `lenso.agent.plugin-configuration@1`, route only that bounded control contract
+  through Console, and scope Plugin workbench requests and caches to the selected
+  Agent.
+
+  Let the reference App Agent Host explicitly select local, durable SQLite, or
+  remote Plugin configuration authority while keeping custom authority injection
+  at the embedding Host boundary.
+
+- 8b7fb06: Group Agent integrations by provided capabilities instead of known Plugin package
+  names. Support read-only and write-only configuration fields and conditional
+  if/then/else object fields, preserving inactive values. Direct unsupported or
+  ambiguous schema compositions to Advanced instead of guessing their controls.
+- 923d469: Separate Plugin management into App plugins, Console extensions, and Management Agent scopes. Add explicit non-Agent App management connections, preserve target-specific configuration authority, and use shared Select and TextField components for filtering.
+- 06249e7: Edit typed configuration arrays and dynamic object keys with native field controls. Preserve array ordering and string whitespace, prevent duplicate-key overwrites, and keep sensitive collection values out of input hydration.
+- d0541de: Show independently verified desired, preparing, active, rejected, and rolled
+  back Plugin Generation state, with Plugin Root revision-aware invalidation,
+  cursor-aware updates, and observable control operation receipts.
+
+### Patch Changes
+
+- d55996b: Render Agent turn controls with the shared Lenso Select surface so model,
+  reasoning, service-tier, and mode menus match the adjacent Skills control.
+- 77b7e2e: Consume the complete Generation-frozen Agent model catalog, omit hidden models
+  from ordinary selection, and retain an explicitly selected hidden model.
+- 8b66e30: Refine the two-level Console sidebar with independent scrolling and aligned sticky search controls, and consolidate Agent composer run configuration into compact searchable menus with an improved slash command palette.
+- ad7372a: Adopt reusable Settings Section and Prompt Composer recipes across Console settings and Agent surfaces while preserving Enter-to-submit and IME-safe composer behavior.
+- dd6aa33: Render conditional configuration properties declared with unrestricted boolean schemas, retaining inactive values when switching options.
+- 2b8766b: Forward authorized App Agent Profile requests, keep runtime and Plugin management errors visible, and allow explicit App Agent Profile and Tool grants in the local launcher.
+- 99c3a39: Upgrade Console to the latest Lenso UI and token packages, and adopt the latest
+  Page Layout template with a persistent global rail, contextual navigation,
+  compact-screen disclosure, and stable application utilities.
+
 ## 1.1.0
 
 ### Minor Changes
