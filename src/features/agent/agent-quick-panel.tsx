@@ -316,7 +316,7 @@ export function AgentQuickPanel({
                       </div>
                     </div>
                   ))}
-                  {visibleTurns.length === 0 && runtimeError ? (
+                  {runtimeError ? (
                     <div {...stylex.props(styles.assistantTurn)}>
                       <p>{runtimeError}</p>
                     </div>

@@ -724,7 +724,7 @@ function AgentConversation({
             ) : null}
           </div>
         ))}
-        {turns.length === 0 && runtimeError ? (
+        {runtimeError ? (
           <div {...stylex.props(styles.assistantMessage)}>
             <p>{runtimeError}</p>
           </div>

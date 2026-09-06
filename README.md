@@ -160,3 +160,25 @@ only when a local environment must use a specific Chromium-compatible binary.
 
 Repository operations notes live in
 [docs/repository-operations.md](docs/repository-operations.md).
+
+### Explicit coding Profile
+
+Install the official coding Profiles into a fresh Agent Home before starting
+its Host. Named Profile Plugin management requires `local_plugin_root`;
+SQLite and remote managed configuration do not support live Profile import.
+The default launcher remains SQLite-managed.
+
+```sh
+export LENSO_AGENT_HOME="$(mktemp -d)"
+lenso-agent-cli profiles install coding
+export LENSO_AGENT_PLUGIN_CONFIGURATION_AUTHORITY=local_plugin_root
+export LENSO_AGENT_PROFILE=code
+export LENSO_AGENT_TOOLS=read,edit,run_process,checkpoint_create,checkpoint_accept
+lenso-console-with-agent
+```
+
+Run the launcher from the workspace the Agent should operate on and configure
+its Provider authentication through the Auth Plugin. Tool grants are explicit:
+`LENSO_AGENT_TOOLS` is a comma-separated allowlist, not an automatic grant to
+all Tools introduced by a Profile. Profile installation into an already managed
+Home is rejected before writing; stopping its Host does not release ownership.
