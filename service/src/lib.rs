@@ -862,7 +862,8 @@ fn allowed_agent_route_with_capabilities(
                 "answer",
             ],
         ) => valid_agent_identity(request_id) && valid_agent_identity(interaction_id),
-        (&Method::POST, ["control", "profile"]) => plugin_configuration,
+        (&Method::POST, ["control", "profile"] | ["control", "profiles", "import"])
+        | (&Method::GET | &Method::PUT, ["control", "tool-policy"]) => plugin_configuration,
         _ if plugin_configuration
             && allowed_plugin_configuration_route(method, parts.as_slice()) =>
         {
@@ -1145,6 +1146,29 @@ mod tests {
             &Method::POST,
             "control/profile",
             false
+        ));
+        for (method, path) in [
+            (Method::POST, "control/profiles/import"),
+            (Method::GET, "control/tool-policy"),
+            (Method::PUT, "control/tool-policy"),
+        ] {
+            assert!(allowed_agent_route(&method, path, true));
+            assert!(!allowed_agent_route(&method, path, false));
+        }
+        assert!(!allowed_agent_route(
+            &Method::DELETE,
+            "control/tool-policy",
+            true
+        ));
+        assert!(!allowed_agent_route(
+            &Method::PUT,
+            "control/profiles/import",
+            true
+        ));
+        assert!(!allowed_agent_route(
+            &Method::POST,
+            "control/profiles/arbitrary",
+            true
         ));
         assert!(!allowed_agent_route(
             &Method::GET,

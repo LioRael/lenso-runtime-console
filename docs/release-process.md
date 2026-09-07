@@ -32,15 +32,23 @@ packaging and installation workflow.
 
 ## Accepted installation cohort
 
-Console 1.2.0 is validated with Lenso Agent 0.1.3, including its separate App Web
-and Console Web binaries. Install the matching Agent release before running
-`pnpm agent:web`. Portable Plugin packaging and lifecycle management use Cargo
-`lenso-cli 0.5.2` or npm `@lenso/cli 0.16.2`.
+The coding setup flow requires Lenso Agent 0.1.4 or newer, including its separate
+App Web and Console Web binaries. Install the matching Agent release before
+running `pnpm agent:web`. Portable Plugin packaging and lifecycle management use
+Cargo `lenso-cli 0.5.2` or npm `@lenso/cli 0.16.2`.
 
-Earlier Agent binaries may start but do not contain the managed-Home guards,
-authority-aware Profile capability or approval queuing from this acceptance.
-The supported coding setup still requires a fresh local-authority Home;
-SQLite-managed Profile hot import is not available.
+SQLite-managed Agents can import official coding Profiles while running. Select
+an Agent in its chat page, open **Set up coding**, import the Profiles, and
+activate Code to validate the environment. Review and save explicit Tool access,
+then choose Plan or Code. Import and Profile activation do not grant Tools.
+A failed activation keeps the previous mode active. Conflicts require reloading
+the relevant configuration; custom Profile files are never overwritten.
+
+The source launcher persists each Agent's Tool policy in its own Home. Keep the
+Agent Home outside the coding workspace, and install the programs required by
+the Profile in the Agent process's PATH. Older Agents and authorities without
+hot import do not display the setup entry. Authentication and model configuration
+remain in the Agent's existing settings.
 
 ## Local checks
 

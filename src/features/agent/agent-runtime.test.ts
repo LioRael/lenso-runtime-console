@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  activeAgentTools,
+  importAgentCodingProfiles,
   answerAgentInteraction,
   cancelAgentTerminal,
   decodeAgentSseFrames,
@@ -488,6 +490,95 @@ describe("Agent runtime projection", () => {
       "/api/console/v1/agent/sessions/same-session",
       "/api/console/v1/agents/support-agent/sessions/same-session",
     ]);
+  });
+
+  it("imports coding Profiles using the selected Agent's authoring and generation revisions", async () => {
+    const fetchMock = vi.fn(async (input: unknown, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.method === "POST") {
+        return Response.json({
+          revision: "8",
+          profiles: ["plan", "code", "code-sandbox"],
+        });
+      }
+      return Response.json(
+        url.endsWith("control/plugins")
+          ? { revision: "7" }
+          : { streamId: "generation-app" }
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    await importAgentCodingProfiles("support-agent");
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      "/api/console/v1/agents/support-agent/control/plugins",
+      "/api/console/v1/agents/support-agent/plugins",
+      "/api/console/v1/agents/support-agent/control/profiles/import",
+    ]);
+    expect(fetchMock.mock.calls[2]?.[1]).toMatchObject({
+      method: "POST",
+      body: JSON.stringify({
+        expectedRevision: "7",
+        expectedStreamId: "generation-app",
+      }),
+    });
+  });
+
+  it("does not import when the authority revision is unavailable", async () => {
+    const fetchMock = vi.fn(async () =>
+      Response.json({ error: "unavailable" }, { status: 409 })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(importAgentCodingProfiles("app")).rejects.toThrow();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps Tool grants scoped to the selected App Agent", async () => {
+    const fetchMock = vi.fn(async (_input: unknown, _init?: RequestInit) =>
+      Response.json({
+        schema: "lenso.agent.tool-policy.v1",
+        revision: 4,
+        available: [],
+        allowed: [],
+      })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    await readAgentToolPolicy(undefined, "app");
+    await updateAgentToolPolicy({
+      targetId: "app",
+      allowed: [],
+      expectedRevision: 3,
+    });
+    expect(fetchMock.mock.calls).toHaveLength(2);
+    for (const call of fetchMock.mock.calls) {
+      expect(call[0]).toBe("/api/console/v1/agents/app/control/tool-policy");
+    }
+  });
+
+  it("narrows persisted grants to the active Profile without changing the saved policy", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json({
+          capabilities: {
+            cancel: true,
+            edit: true,
+            sessionList: true,
+            sessionRead: true,
+            userInteraction: true,
+          },
+          mode: "console",
+          profile: "plan",
+          trajectory: "lenso.agent.trajectory@1",
+          tools: {
+            allowed: ["read", "edit"],
+            available: [{ name: "read", description: "Read" }],
+          },
+        })
+      )
+    );
+    const bootstrap = await readAgentBootstrap();
+    expect(activeAgentTools(bootstrap)).toEqual(["read"]);
+    expect(bootstrap.tools.allowed).toEqual(["read", "edit"]);
   });
 
   it("reads and revision-fences Agent Tool policy updates", async () => {

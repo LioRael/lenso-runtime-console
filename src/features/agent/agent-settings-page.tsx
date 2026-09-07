@@ -489,7 +489,9 @@ function ContextCatalog({ agent }: { agent: AgentIdentity }) {
 
 function ToolAccess({ agent }: { agent: AgentIdentity }) {
   const queryClient = useQueryClient();
-  const canManage = agent.role === "console";
+  const canManage = agent.capabilities.includes(
+    AGENT_PLUGIN_CONFIGURATION_CAPABILITY
+  );
   const policyKey = ["agent-settings", agent.id, "tool-policy"];
   const bootstrapKey = ["agent-settings", agent.id, "bootstrap"];
   const bootstrap = useQuery({
@@ -499,12 +501,13 @@ function ToolAccess({ agent }: { agent: AgentIdentity }) {
   });
   const policy = useQuery({
     queryKey: policyKey,
-    queryFn: ({ signal }) => readAgentToolPolicy(signal),
+    queryFn: ({ signal }) => readAgentToolPolicy(signal, agent.id),
     enabled: canManage,
     retry: false,
   });
   const mutation = useMutation({
-    mutationFn: updateAgentToolPolicy,
+    mutationFn: (request: { allowed: string[]; expectedRevision: number }) =>
+      updateAgentToolPolicy({ ...request, targetId: agent.id }),
     onSuccess: (updated) => {
       queryClient.setQueryData(policyKey, updated);
       void queryClient.invalidateQueries({ queryKey: bootstrapKey });
@@ -520,8 +523,8 @@ function ToolAccess({ agent }: { agent: AgentIdentity }) {
       title="Tool access"
       description={
         canManage
-          ? "Choose which Tools the Console Agent may use. Changes apply to new turns."
-          : "The effective Tool access for this Agent. Its Host owns policy changes; Console does not proxy Host control."
+          ? "Choose which Tools this Agent may use. Changes apply to new turns."
+          : "The effective Tool access for this Agent. Its Host has not enabled policy management through Console."
       }
     >
       {bootstrap.error || policy.error || mutation.error ? (

@@ -34,6 +34,8 @@ async fn run() -> anyhow::Result<()> {
     app_command
         .arg("--listen")
         .arg(APP_AGENT_ADDRESS)
+        .arg("--tool-policy")
+        .arg(agent_home()?.join("tool-policy.json"))
         .arg("--plugin-control")
         .env_remove("LENSO_AGENT_DATA_PLANE_TOKEN")
         .env("LENSO_AGENT_HOME", agent_home()?)
