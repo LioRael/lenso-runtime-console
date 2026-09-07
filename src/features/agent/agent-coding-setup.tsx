@@ -105,7 +105,13 @@ export function AgentCodingSetup({
       <Button
         aria-label="Set up coding"
         disabled={busy}
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          setPolicy(undefined);
+          setSaved(false);
+          setStatus(undefined);
+          setSetupError(undefined);
+          setOpen(true);
+        }}
         size="compact"
         variant="ghost"
         xstyle={styles.entry}
