@@ -39,6 +39,7 @@ import {
 import { PromptComposer } from "../../components/lenso/recipes/prompt-composer";
 import { PluginAgentReceipts } from "../plugins/plugin-agent-receipts";
 import { AgentAskUser } from "./agent-ask-user";
+import { AgentCodingSetup } from "./agent-coding-setup";
 import {
   ComposerSlashMenu,
   RunConfigurationMenu,
@@ -54,6 +55,7 @@ import {
 import { hasAgentConversation } from "./agent-page-state";
 import { agentPageStyles as styles } from "./agent-page.stylex";
 import {
+  AGENT_PLUGIN_CONFIGURATION_CAPABILITY,
   modelsForSelector,
   type AgentBootstrap,
   type AgentContextCatalog,
@@ -209,6 +211,8 @@ export function AgentPage({ agentId, conversationId }: AgentPageProps) {
     cancelEditing: cancelEditingTurn,
     cancelRunningTurn,
     changeProfile,
+    configureRuntime,
+    isConfiguring,
     compactSession,
     contextCatalog,
     draft,
@@ -304,6 +308,21 @@ export function AgentPage({ agentId, conversationId }: AgentPageProps) {
         onViewChange={setView}
         view={view}
       />
+      {runtime?.capabilities.profileImport &&
+      agents
+        .find((agent) => agent.id === activeAgentId)
+        ?.capabilities.includes(AGENT_PLUGIN_CONFIGURATION_CAPABILITY) ? (
+        <AgentCodingSetup
+          agentId={activeAgentId}
+          agentLabel={
+            agents.find((agent) => agent.id === activeAgentId)?.label ??
+            activeAgentId
+          }
+          busy={isRunning || isConfiguring}
+          configure={configureRuntime}
+          key={activeAgentId}
+        />
+      ) : null}
       {conversation ? (
         view === "trajectory" ? (
           <AgentTrajectory trajectory={trajectory} />
@@ -324,6 +343,7 @@ export function AgentPage({ agentId, conversationId }: AgentPageProps) {
               canCancel={canCancel}
               contextCatalog={contextCatalog}
               draft={draft}
+              isConfiguring={isConfiguring}
               isRunning={isRunning}
               modelCatalog={modelCatalog}
               onChange={setDraft}
@@ -447,6 +467,7 @@ export function AgentPage({ agentId, conversationId }: AgentPageProps) {
                 canCancel={canCancel}
                 contextCatalog={contextCatalog}
                 draft={draft}
+                isConfiguring={isConfiguring}
                 isRunning={isRunning}
                 modelCatalog={modelCatalog}
                 onChange={setDraft}
@@ -920,6 +941,7 @@ type AgentComposerProps = {
   canCancel: boolean;
   contextCatalog: AgentContextCatalog | undefined;
   draft: string;
+  isConfiguring: boolean;
   isRunning: boolean;
   modelCatalog: AgentModelCatalog | undefined;
   onChange: (value: string) => void;
@@ -947,6 +969,7 @@ function AgentComposer({
   canCancel,
   contextCatalog,
   draft,
+  isConfiguring,
   isRunning,
   modelCatalog,
   onChange,
@@ -1077,6 +1100,7 @@ function AgentComposer({
         canCompact={canCompact}
         draft={draft}
         effectiveModel={effectiveModel}
+        isConfiguring={isConfiguring}
         isRunning={isRunning}
         onCancel={onCancel}
         onCompact={onCompact}
@@ -1103,6 +1127,7 @@ type AgentComposerToolbarProps = Pick<
   | "canCompact"
   | "draft"
   | "isRunning"
+  | "isConfiguring"
   | "onCancel"
   | "onCompact"
   | "onModelChange"
@@ -1130,6 +1155,7 @@ function AgentComposerToolbar({
   canCompact,
   draft,
   effectiveModel,
+  isConfiguring,
   isRunning,
   onCancel,
   onCompact,
@@ -1160,13 +1186,13 @@ function AgentComposerToolbar({
         {runtime?.capabilities.profileSelection ? (
           <TurnSelect
             aria-label="Agent mode"
-            disabled={isRunning}
+            disabled={isRunning || isConfiguring}
             icon={<Terminal aria-hidden="true" size={12} />}
             onValueChange={(value) => onProfileChange(value || undefined)}
             options={[
               { label: "Normal", value: "" },
               { label: "Plan", value: "plan" },
-              { label: "Auto", value: "code" },
+              { label: "Code", value: "code" },
             ]}
             value={profile ?? ""}
           />
@@ -1177,15 +1203,15 @@ function AgentComposerToolbar({
               render={
                 <Button
                   aria-label="Turn permissions"
-                  disabled={isRunning}
+                  disabled={isRunning || isConfiguring}
                   size="compact"
                   variant="ghost"
                   xstyle={styles.composerControl}
                 >
                   <ShieldCheck aria-hidden="true" size={12} />
-                  {runtime.tools.allowed.length === 0
+                  {availableTurnTools.length === 0
                     ? "No tools"
-                    : selectedTools.length === runtime.tools.allowed.length
+                    : selectedTools.length === availableTurnTools.length
                       ? "Tools"
                       : `${selectedTools.length} tools`}
                   <ChevronDown aria-hidden="true" size={11} />
@@ -1225,7 +1251,7 @@ function AgentComposerToolbar({
         {runtime?.capabilities.sessionCompact && canCompact ? (
           <IconButton
             aria-label="Compact conversation context"
-            disabled={isRunning}
+            disabled={isRunning || isConfiguring}
             onClick={onCompact}
             size="compact"
             type="button"
@@ -1239,7 +1265,7 @@ function AgentComposerToolbar({
       <PromptComposer.Actions xstyle={styles.composerActions}>
         {selectableModels.length ? (
           <RunConfigurationMenu
-            disabled={isRunning}
+            disabled={isRunning || isConfiguring}
             modelOptions={selectableModels.map((model) => ({
               label: model.hidden
                 ? `${model.displayName} (hidden)`
@@ -1291,7 +1317,7 @@ function AgentComposerToolbar({
         <IconButton
           aria-label={isRunning ? "Queue follow-up" : "Submit comment"}
           data-active={Boolean(draft.trim()) || undefined}
-          disabled={!draft.trim()}
+          disabled={isConfiguring || !draft.trim()}
           size="compact"
           type="submit"
           variant="secondary"

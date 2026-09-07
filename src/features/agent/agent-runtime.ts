@@ -46,6 +46,7 @@ export type AgentBootstrap = {
     cancel: boolean;
     contextSources: boolean;
     edit: boolean;
+    profileImport?: boolean;
     profileSelection: boolean;
     sessionCompact: boolean;
     sessionList: boolean;
@@ -65,6 +66,11 @@ export type AgentBootstrap = {
     available: AgentToolSummary[];
   };
 };
+
+export function activeAgentTools(bootstrap: AgentBootstrap): string[] {
+  const available = new Set(bootstrap.tools.available.map((tool) => tool.name));
+  return bootstrap.tools.allowed.filter((name) => available.has(name));
+}
 
 export type AgentContextPrompt = {
   argumentsSchemaJson: string;
@@ -696,10 +702,68 @@ export async function selectAgentProfile(
   return typeof object.profile === "string" ? object.profile : undefined;
 }
 
+export async function importAgentCodingProfiles(
+  targetId: AgentId
+): Promise<void> {
+  const [configurationResponse, inventoryResponse] = await Promise.all(
+    ["control/plugins", "plugins"].map((path) =>
+      fetch(agentApiUrl(targetId, path), {
+        headers: agentHeaders("application/json", false),
+      })
+    )
+  );
+  if (!(configurationResponse?.ok && inventoryResponse?.ok)) {
+    const failed = configurationResponse?.ok
+      ? inventoryResponse
+      : configurationResponse;
+    throw new Error(
+      failed ? await responseError(failed) : "Agent revision is unavailable"
+    );
+  }
+  const configuration = requiredObject(
+    await configurationResponse.json(),
+    "Agent configuration"
+  );
+  const inventory = requiredObject(
+    await inventoryResponse.json(),
+    "Agent inventory"
+  );
+  if (
+    typeof configuration.revision !== "string" ||
+    typeof inventory.streamId !== "string"
+  ) {
+    throw new TypeError("Agent import revisions are malformed");
+  }
+  const response = await fetch(
+    agentApiUrl(targetId, "control/profiles/import"),
+    {
+      body: JSON.stringify({
+        expectedRevision: configuration.revision,
+        expectedStreamId: inventory.streamId,
+      }),
+      headers: agentHeaders("application/json", true),
+      method: "POST",
+    }
+  );
+  if (!response.ok) {
+    throw new Error(await responseError(response));
+  }
+  const receipt = requiredObject(await response.json(), "Agent Profile import");
+  const { profiles } = receipt;
+  if (
+    typeof receipt.revision !== "string" ||
+    !Array.isArray(profiles) ||
+    !["plan", "code", "code-sandbox"].every((name) => profiles.includes(name))
+  ) {
+    throw new TypeError("Agent Profile import receipt is malformed");
+  }
+}
+
 export async function readAgentToolPolicy(
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  targetId: AgentId = "console"
 ): Promise<AgentToolPolicy> {
-  const response = await fetch(agentApiUrl("console", "control/tool-policy"), {
+  const response = await fetch(agentApiUrl(targetId, "control/tool-policy"), {
     headers: agentHeaders("application/json", false),
     ...(signal ? { signal } : {}),
   });
@@ -712,11 +776,13 @@ export async function readAgentToolPolicy(
 export async function updateAgentToolPolicy({
   allowed,
   expectedRevision,
+  targetId = "console",
 }: {
   allowed: string[];
   expectedRevision: number;
+  targetId?: AgentId;
 }): Promise<AgentToolPolicy> {
-  const response = await fetch(agentApiUrl("console", "control/tool-policy"), {
+  const response = await fetch(agentApiUrl(targetId, "control/tool-policy"), {
     body: JSON.stringify({ allowed, expectedRevision }),
     headers: agentHeaders("application/json", true),
     method: "PUT",
@@ -1146,6 +1212,7 @@ function agentBootstrap(value: unknown): AgentBootstrap {
       cancel: capabilities.cancel,
       contextSources: capabilities.contextSources === true,
       edit: capabilities.edit,
+      profileImport: capabilities.profileImport === true,
       profileSelection: capabilities.profileSelection === true,
       sessionCompact: capabilities.sessionCompact === true,
       sessionList: capabilities.sessionList,

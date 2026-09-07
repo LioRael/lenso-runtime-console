@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
+  activeAgentTools,
   answerAgentInteraction,
   cancelAgentTurn,
   cancelAgentTerminal,
@@ -134,6 +135,8 @@ export function useAgentConversation({
   const [trajectory, setTrajectory] = useState<AgentTrajectory>();
   const [runtimeError, setRuntimeError] = useState<string>();
   const [isRunning, setIsRunning] = useState(false);
+  const [isConfiguring, setIsConfiguring] = useState(false);
+  const configuration = useRef<AbortController | undefined>(undefined);
   const [isAnsweringInteraction, setIsAnsweringInteraction] = useState(false);
   const [pendingInteraction, setPendingInteraction] =
     useState<AgentPendingInteraction>();
@@ -153,6 +156,9 @@ export function useAgentConversation({
 
   useEffect(() => {
     const controller = new AbortController();
+    configuration.current?.abort();
+    configuration.current = undefined;
+    setIsConfiguring(false);
     setRuntime(undefined);
     setContextCatalog(undefined);
     setModelCatalog(undefined);
@@ -171,7 +177,7 @@ export function useAgentConversation({
         setProfile(
           bootstrap.profile === "default" ? undefined : bootstrap.profile
         );
-        setSelectedTools(bootstrap.tools.allowed);
+        setSelectedTools(activeAgentTools(bootstrap));
         setCanCancel(bootstrap.capabilities.cancel);
         setCanEdit(bootstrap.capabilities.edit);
         setCanUserInteraction(bootstrap.capabilities.userInteraction);
@@ -242,7 +248,10 @@ export function useAgentConversation({
       setCanEdit(false);
       setCanUserInteraction(false);
     });
-    return () => controller.abort();
+    return () => {
+      controller.abort();
+      configuration.current?.abort();
+    };
   }, [enableTerminal, targetId]);
 
   useEffect(() => {
@@ -336,7 +345,12 @@ export function useAgentConversation({
 
   const startTurn = useCallback(
     (prompt: string, editedTurnId?: string) => {
-      if (!prompt || activeTurn.current || activeTerminal.current) {
+      if (
+        !prompt ||
+        configuration.current ||
+        activeTurn.current ||
+        activeTerminal.current
+      ) {
         return;
       }
       const pendingTurnId = `pending-${Date.now()}`;
@@ -586,6 +600,9 @@ export function useAgentConversation({
   );
 
   const submit = useCallback(() => {
+    if (configuration.current) {
+      return;
+    }
     const prompt = draft.trim();
     if (!prompt) {
       return;
@@ -709,22 +726,103 @@ export function useAgentConversation({
     void compact();
   }, [isRunning, runtime?.capabilities.sessionCompact, targetId]);
 
+  const configureRuntime = useCallback(
+    async (operation: () => Promise<unknown>) => {
+      if (
+        configuration.current ||
+        activeTurn.current ||
+        activeTerminal.current
+      ) {
+        throw new Error("Wait for the current operation to finish.");
+      }
+      const controller = new AbortController();
+      configuration.current = controller;
+      setIsConfiguring(true);
+      setRuntimeError(undefined);
+      try {
+        try {
+          await operation();
+        } finally {
+          if (!controller.signal.aborted) {
+            const bootstrap = await readAgentBootstrap(
+              controller.signal,
+              targetId
+            );
+            const [models, context, terminal] = await Promise.all([
+              bootstrap.capabilities.turnModelSelection
+                ? readAgentModels(controller.signal, targetId).catch(
+                    () => undefined
+                  )
+                : undefined,
+              bootstrap.capabilities.contextSources
+                ? readAgentContextSources(controller.signal, targetId).catch(
+                    () => undefined
+                  )
+                : undefined,
+              enableTerminal && bootstrap.capabilities.terminalCommands
+                ? readAgentTerminalCatalog(controller.signal, targetId).catch(
+                    () => undefined
+                  )
+                : undefined,
+            ]);
+            if (!controller.signal.aborted) {
+              setRuntime(bootstrap);
+              setProfile(
+                bootstrap.profile === "default" ? undefined : bootstrap.profile
+              );
+              setSelectedTools(activeAgentTools(bootstrap));
+              setCanCancel(bootstrap.capabilities.cancel);
+              setCanEdit(bootstrap.capabilities.edit);
+              setCanUserInteraction(bootstrap.capabilities.userInteraction);
+              setModelCatalog(models);
+              setSelectedModel(models?.selectedModel);
+              setSelectedReasoningEffort(models?.selectedReasoningEffort);
+              setSelectedServiceTier(models?.selectedServiceTier);
+              setContextCatalog(context);
+              setTerminalCatalog(terminal);
+            }
+          }
+        }
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          setRuntimeError(errorMessage(error));
+        }
+        throw error;
+      } finally {
+        if (
+          configuration.current === controller &&
+          !controller.signal.aborted
+        ) {
+          configuration.current = undefined;
+          setIsConfiguring(false);
+        }
+      }
+    },
+    [enableTerminal, targetId]
+  );
+
   const changeProfile = useCallback(
     (nextProfile: string | undefined) => {
       if (!(runtime?.capabilities.profileSelection && !isRunning)) {
         return;
       }
-      setRuntimeError(undefined);
-      const selectProfile = async () => {
+      const select = async () => {
         try {
-          setProfile(await selectAgentProfile(nextProfile, targetId));
-        } catch (error) {
-          setRuntimeError(errorMessage(error));
+          await configureRuntime(() =>
+            selectAgentProfile(nextProfile, targetId)
+          );
+        } catch {
+          /* Configuration errors are displayed next to the composer. */
         }
       };
-      void selectProfile();
+      void select();
     },
-    [isRunning, runtime?.capabilities.profileSelection, targetId]
+    [
+      configureRuntime,
+      isRunning,
+      runtime?.capabilities.profileSelection,
+      targetId,
+    ]
   );
 
   const renameSession = useCallback(
@@ -776,6 +874,8 @@ export function useAgentConversation({
     cancelEditing,
     cancelRunningTurn,
     changeProfile,
+    configureRuntime,
+    isConfiguring,
     compactSession,
     contextCatalog,
     draft,
