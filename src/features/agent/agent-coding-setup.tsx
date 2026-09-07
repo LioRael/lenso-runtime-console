@@ -1,6 +1,7 @@
 import { Button } from "@lenso/ui/button";
 import { Dialog } from "@lenso/ui/dialog";
 import * as stylex from "@stylexjs/stylex";
+import { Wrench } from "lucide-react";
 import { useState } from "react";
 
 import { lensoUiTokens as tokens } from "../../lenso-ui-token-refs.stylex";
@@ -16,7 +17,10 @@ const styles = stylex.create({
   portal: { position: "relative", zIndex: 100 },
   backdrop: { zIndex: 100 },
   viewport: { zIndex: 101 },
-  entry: { alignSelf: "flex-end", marginInline: tokens.space4 },
+  entry: { flexShrink: 0 },
+  entryLabel: {
+    display: { default: "inline", "@media (max-width: 760px)": "none" },
+  },
   popup: { maxWidth: 540, width: "calc(100vw - 32px)" },
   body: { display: "grid", gap: tokens.space4 },
   section: { display: "grid", gap: tokens.space2 },
@@ -99,13 +103,15 @@ export function AgentCodingSetup({
       open={open}
     >
       <Button
+        aria-label="Set up coding"
         disabled={busy}
         onClick={() => setOpen(true)}
         size="compact"
         variant="ghost"
         xstyle={styles.entry}
       >
-        Set up coding
+        <Wrench aria-hidden="true" size={13} />
+        <span {...stylex.props(styles.entryLabel)}>Set up coding</span>
       </Button>
       <Dialog.Portal {...stylex.props(styles.portal)}>
         <Dialog.Backdrop xstyle={styles.backdrop} />

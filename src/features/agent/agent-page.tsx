@@ -33,6 +33,7 @@ import {
   useRef,
   useState,
   type FormEvent,
+  type ReactNode,
   type KeyboardEvent,
 } from "react";
 
@@ -290,6 +291,23 @@ export function AgentPage({ agentId, conversationId }: AgentPageProps) {
       data-view={conversation ? view : undefined}
     >
       <AgentHeader
+        codingSetup={
+          runtime?.capabilities.profileImport &&
+          agents
+            .find((agent) => agent.id === activeAgentId)
+            ?.capabilities.includes(AGENT_PLUGIN_CONFIGURATION_CAPABILITY) ? (
+            <AgentCodingSetup
+              agentId={activeAgentId}
+              agentLabel={
+                agents.find((agent) => agent.id === activeAgentId)?.label ??
+                activeAgentId
+              }
+              busy={isRunning || isConfiguring}
+              configure={configureRuntime}
+              key={activeAgentId}
+            />
+          ) : null
+        }
         activeAgentId={activeAgentId}
         agents={agents}
         conversationId={displayedConversationId}
@@ -308,21 +326,6 @@ export function AgentPage({ agentId, conversationId }: AgentPageProps) {
         onViewChange={setView}
         view={view}
       />
-      {runtime?.capabilities.profileImport &&
-      agents
-        .find((agent) => agent.id === activeAgentId)
-        ?.capabilities.includes(AGENT_PLUGIN_CONFIGURATION_CAPABILITY) ? (
-        <AgentCodingSetup
-          agentId={activeAgentId}
-          agentLabel={
-            agents.find((agent) => agent.id === activeAgentId)?.label ??
-            activeAgentId
-          }
-          busy={isRunning || isConfiguring}
-          configure={configureRuntime}
-          key={activeAgentId}
-        />
-      ) : null}
       {conversation ? (
         view === "trajectory" ? (
           <AgentTrajectory trajectory={trajectory} />
@@ -498,6 +501,7 @@ export function AgentPage({ agentId, conversationId }: AgentPageProps) {
 }
 
 function AgentHeader({
+  codingSetup,
   activeAgentId,
   agents,
   conversationId,
@@ -506,6 +510,7 @@ function AgentHeader({
   onViewChange,
   view,
 }: {
+  codingSetup?: ReactNode;
   activeAgentId: string;
   agents: AgentIdentity[];
   conversationId: string | undefined;
@@ -598,7 +603,7 @@ function AgentHeader({
             </Tabs.List>
           </Tabs.Root>
         ) : null}
-        {agents.length > 1 || (onRename && !renaming) ? (
+        {codingSetup || agents.length > 1 || (onRename && !renaming) ? (
           <div {...stylex.props(styles.headerActions)}>
             {agents.length > 1 ? (
               <label {...stylex.props(styles.agentTarget)}>
@@ -624,6 +629,7 @@ function AgentHeader({
                 </select>
               </label>
             ) : null}
+            {codingSetup}
             {onRename && !renaming ? (
               <IconButton
                 aria-label="Rename conversation"
